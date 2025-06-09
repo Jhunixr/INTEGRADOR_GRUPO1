@@ -6,105 +6,119 @@ import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
 import java.time.LocalDate;
-import java.time.Period;
+import java.util.UUID; // Importar UUID para un identificador único
 
-public class Employee {
-    private Long id;
-    private String firstName;
-    private String lastName;
-    private String email;
-    private String department;
-    private Double salary;
-    private LocalDate birthDate;
-    private LocalDate hireDate;
-    
+public class Promocion {
+    private UUID idPromocion;
+    private String nombre;
+    private String descripcion;
+    private String tipoPromocion; // Ej., "Porcentual", "Fijo", "2x1"
+    private Double valorDescuento; // Puede ser porcentaje (0.10 para 10%) o monto fijo
+    private LocalDate fechaInicio;
+    private LocalDate fechaFin;
+    private String codigoPromocional; // Opcional, si la promoción requiere un código
+    private Integer cantidadMaximaUsos; // Opcional, límite de usos globales
+    private Integer usosRestantes; // Opcional, contador de usos restantes
+    private String aplicableA; // Ej., "Todos", "Eventos", "Servicios" (podría ser una enumeración)
+    private boolean activo;
+
     // Constructor vacío
-    public Employee() {}
-    
-    // Constructor completo
-    public Employee(Long id, String firstName, String lastName, String email, 
-                   String department, Double salary, LocalDate birthDate, LocalDate hireDate) {
-        this.id = id;
-        this.firstName = firstName;
-        this.lastName = lastName;
-        this.email = email;
-        this.department = department;
-        this.salary = salary;
-        this.birthDate = birthDate;
-        this.hireDate = hireDate;
+    public Promocion() {
+        this.idPromocion = UUID.randomUUID(); // Asignar un ID único al crear
+        this.activo = true; // Por defecto, una promoción al crearla está activa
     }
-    
-    /**
-     * Obtiene el nombre completo del empleado
-     * Utiliza Apache Commons StringUtils para manejo seguro de cadenas
-     */
-    public String getFullName() {
-        return StringUtils.join(
-            StringUtils.defaultString(firstName), 
-            " ", 
-            StringUtils.defaultString(lastName)
-        ).trim();
+
+    // Constructor completo (ajustado para incluir todos los atributos)
+    public Promocion(String nombre, String descripcion, String tipoPromocion,
+                     Double valorDescuento, LocalDate fechaInicio, LocalDate fechaFin,
+                     String codigoPromocional, Integer cantidadMaximaUsos,
+                     String aplicableA) {
+        this(); // Llama al constructor vacío para inicializar idPromocion y activo
+        this.nombre = nombre;
+        this.descripcion = descripcion;
+        this.tipoPromocion = tipoPromocion;
+        this.valorDescuento = valorDescuento;
+        this.fechaInicio = fechaInicio;
+        this.fechaFin = fechaFin;
+        this.codigoPromocional = codigoPromocional;
+        this.cantidadMaximaUsos = cantidadMaximaUsos;
+        this.usosRestantes = cantidadMaximaUsos; // Inicialmente, usosRestantes es igual a cantidadMaximaUsos
+        this.aplicableA = aplicableA;
     }
-    
+
     /**
-     * Calcula la edad del empleado
+     * Verifica si la promoción es válida en la fecha actual y si no ha excedido sus usos.
      */
-    public int getAge() {
-        if (birthDate == null) {
-            return 0;
+    public boolean esValida() {
+        LocalDate hoy = LocalDate.now();
+        boolean porFecha = (fechaInicio == null || !hoy.isBefore(fechaInicio)) &&
+                           (fechaFin == null || !hoy.isAfter(fechaFin));
+        boolean porUsos = (cantidadMaximaUsos == null || usosRestantes > 0);
+
+        return this.activo && porFecha && porUsos;
+    }
+
+    /**
+     * Registra un uso de la promoción, decrementando el contador si aplica.
+     */
+    public void registrarUso() {
+        if (cantidadMaximaUsos != null && usosRestantes != null && usosRestantes > 0) {
+            usosRestantes--;
         }
-        return Period.between(birthDate, LocalDate.now()).getYears();
     }
-    
+
     /**
-     * Calcula los años de servicio
+     * Cancela la promoción, marcándola como inactiva.
      */
-    public int getYearsOfService() {
-        if (hireDate == null) {
-            return 0;
-        }
-        return Period.between(hireDate, LocalDate.now()).getYears();
+    public void cancelarPromocion() {
+        this.activo = false;
     }
-    
-    /**
-     * Valida si los datos del empleado son válidos
-     * Utiliza Apache Commons StringUtils
-     */
-    public boolean isValid() {
-        return StringUtils.isNotBlank(firstName) && 
-               StringUtils.isNotBlank(lastName) && 
-               StringUtils.isNotBlank(email) && 
-               StringUtils.isNotBlank(department) && 
-               salary != null && salary > 0 &&
-               birthDate != null && 
-               hireDate != null;
-    }
-    
+
     // Getters y Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    
-    public String getFirstName() { return firstName; }
-    public void setFirstName(String firstName) { this.firstName = firstName; }
-    
-    public String getLastName() { return lastName; }
-    public void setLastName(String lastName) { this.lastName = lastName; }
-    
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
-    
-    public String getDepartment() { return department; }
-    public void setDepartment(String department) { this.department = department; }
-    
-    public Double getSalary() { return salary; }
-    public void setSalary(Double salary) { this.salary = salary; }
-    
-    public LocalDate getBirthDate() { return birthDate; }
-    public void setBirthDate(LocalDate birthDate) { this.birthDate = birthDate; }
-    
-    public LocalDate getHireDate() { return hireDate; }
-    public void setHireDate(LocalDate hireDate) { this.hireDate = hireDate; }
-    
+    public UUID getIdPromocion() { return idPromocion; }
+    // No se debería permitir setear el ID una vez creado, pero se deja para consistencia si es necesario.
+    public void setIdPromocion(UUID idPromocion) { this.idPromocion = idPromocion; }
+
+    public String getNombre() { return nombre; }
+    public void setNombre(String nombre) { this.nombre = nombre; }
+
+    public String getDescripcion() { return descripcion; }
+    public void setDescripcion(String descripcion) { this.descripcion = descripcion; }
+
+    public String getTipoPromocion() { return tipoPromocion; }
+    public void setTipoPromocion(String tipoPromocion) { this.tipoPromocion = tipoPromocion; }
+
+    public Double getValorDescuento() { return valorDescuento; }
+    public void setValorDescuento(Double valorDescuento) { this.valorDescuento = valorDescuento; }
+
+    public LocalDate getFechaInicio() { return fechaInicio; }
+    public void setFechaInicio(LocalDate fechaInicio) { this.fechaInicio = fechaInicio; }
+
+    public LocalDate getFechaFin() { return fechaFin; }
+    public void setFechaFin(LocalDate fechaFin) { this.fechaFin = fechaFin; }
+
+    public String getCodigoPromocional() { return codigoPromocional; }
+    public void setCodigoPromocional(String codigoPromocional) { this.codigoPromocional = codigoPromocional; }
+
+    public Integer getCantidadMaximaUsos() { return cantidadMaximaUsos; }
+    public void setCantidadMaximaUsos(Integer cantidadMaximaUsos) {
+        this.cantidadMaximaUsos = cantidadMaximaUsos;
+        // Si se actualiza la cantidad máxima, se podría resetear o ajustar usosRestantes
+        if (this.usosRestantes == null || this.usosRestantes > cantidadMaximaUsos) {
+            this.usosRestantes = cantidadMaximaUsos;
+        }
+    }
+
+    public Integer getUsosRestantes() { return usosRestantes; }
+    // No se debería setear directamente usosRestantes fuera de registrarUso(), pero se incluye por si acaso.
+    public void setUsosRestantes(Integer usosRestantes) { this.usosRestantes = usosRestantes; }
+
+    public String getAplicableA() { return aplicableA; }
+    public void setAplicableA(String aplicableA) { this.aplicableA = aplicableA; }
+
+    public boolean isActivo() { return activo; }
+    public void setActivo(boolean activo) { this.activo = activo; }
+
     /**
      * Implementación de equals usando Google Guava Objects
      */
@@ -112,35 +126,38 @@ public class Employee {
     public boolean equals(Object obj) {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
-        
-        Employee employee = (Employee) obj;
-        return Objects.equal(id, employee.id) &&
-               Objects.equal(firstName, employee.firstName) &&
-               Objects.equal(lastName, employee.lastName) &&
-               Objects.equal(email, employee.email);
+
+        Promocion promocion = (Promocion) obj;
+        // Las promociones se consideran iguales si tienen el mismo ID
+        return Objects.equal(idPromocion, promocion.idPromocion);
     }
-    
+
     /**
      * Implementación de hashCode usando Google Guava Objects
      */
     @Override
     public int hashCode() {
-        return Objects.hashCode(id, firstName, lastName, email);
+        return Objects.hashCode(idPromocion);
     }
-    
+
     /**
      * Implementación de toString usando Apache Commons ToStringBuilder
      */
     @Override
     public String toString() {
         return new ToStringBuilder(this, ToStringStyle.JSON_STYLE)
-                .append("id", id)
-                .append("fullName", getFullName())
-                .append("email", email)
-                .append("department", department)
-                .append("salary", salary)
-                .append("age", getAge())
-                .append("yearsOfService", getYearsOfService())
+                .append("idPromocion", idPromocion)
+                .append("nombre", nombre)
+                .append("descripcion", descripcion)
+                .append("tipoPromocion", tipoPromocion)
+                .append("valorDescuento", valorDescuento)
+                .append("fechaInicio", fechaInicio)
+                .append("fechaFin", fechaFin)
+                .append("codigoPromocional", codigoPromocional)
+                .append("cantidadMaximaUsos", cantidadMaximaUsos)
+                .append("usosRestantes", usosRestantes)
+                .append("aplicableA", aplicableA)
+                .append("activo", activo)
                 .toString();
     }
 }
