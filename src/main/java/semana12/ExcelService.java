@@ -1,7 +1,6 @@
 package semana12;
 
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,326 +9,222 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.ZoneId;
+import java.time.ZoneId; // Para conversión de fechas
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Date;
-import java.time.ZoneId;
+import java.util.Date; // Para conversión de fechas
+import java.util.UUID; // Para manejar IDs de Promocion
 
+/**
+ * Servicio para leer y escribir datos de Promociones desde/hacia archivos Excel.
+ */
 public class ExcelService {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(ExcelService.class);
-    
-    // Índices de columnas en el archivo Excel
-    private static final int COL_ID = 0;
-    private static final int COL_FIRST_NAME = 1;
-    private static final int COL_LAST_NAME = 2;
-    private static final int COL_EMAIL = 3;
-    private static final int COL_DEPARTMENT = 4;
-    private static final int COL_SALARY = 5;
-    private static final int COL_BIRTH_DATE = 6;
-    private static final int COL_HIRE_DATE = 7;
-    
+
     /**
-     * Lee empleados desde un archivo Excel
+     * Reads a list of promotions from the first sheet of an Excel file.
+     * Expects a specific column format for each Promotion attribute.
+     *
+     * @param filePath The path to the Excel file.
+     * @return A list of Promotion objects.
+     * @throws IOException If an error occurs while reading the file.
      */
-    public List<Employee> readEmployeesFromExcel(String filePath) throws IOException {
-        logger.info("Iniciando lectura de archivo Excel: {}", filePath);
-        
-        List<Employee> employees = new ArrayList<>();
-        
+    public List<Promocion> readPromocionesFromExcel(String filePath) throws IOException {
+        List<Promocion> promociones = new ArrayList<>();
         try (FileInputStream fis = new FileInputStream(filePath);
              Workbook workbook = new XSSFWorkbook(fis)) {
-            
-            Sheet sheet = workbook.getSheetAt(0);
-            logger.debug("Leyendo hoja: {} con {} filas", sheet.getSheetName(), sheet.getLastRowNum());
-            
-            // Saltar la fila de encabezados (fila 0)
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                Row row = sheet.getRow(i);
-                if (row == null) continue;
-                
+
+            Sheet sheet = workbook.getSheetAt(0); // Works with the first sheet.
+            Iterator<Row> rowIterator = sheet.iterator();
+
+            // Skips the header row.
+            if (rowIterator.hasNext()) {
+                rowIterator.next();
+            }
+
+            // Iterates over each row to read promotions.
+            while (rowIterator.hasNext()) {
+                Row row = rowIterator.next();
+                // Ignores completely empty rows (based on the first cell).
+                if (row.getCell(0) == null || row.getCell(0).getCellType() == CellType.BLANK) {
+                    continue;
+                }
+
                 try {
-                    Employee employee = extractEmployeeFromRow(row);
-                    if (employee != null) {
-                        employees.add(employee);
-                        logger.debug("Empleado leído: {}", employee.getId());
+                    Promocion promocion = new Promocion();
+
+                    // Reads the ID (expects String for UUID, handles Numeric with warning).
+                    Cell idCell = row.getCell(0);
+                    if (idCell != null) {
+                        if (idCell.getCellType() == CellType.STRING) {
+                            promocion.setIdPromocion(UUID.fromString(idCell.getStringCellValue()));
+                        } else if (idCell.getCellType() == CellType.NUMERIC) {
+                            logger.warn("Numeric Promotion ID in Excel (Row {}). Expected String for UUID.", row.getRowNum());
+                        }
+                    } else {
+                        // Generates a new UUID if the ID is not found in the cell.
+                        promocion.setIdPromocion(UUID.randomUUID());
                     }
+
+                    // Reading other promotion attributes by column index.
+                    promocion.setNombre(getStringCellValue(row.getCell(1)));
+                    promocion.setDescripcion(getStringCellValue(row.getCell(2)));
+                    promocion.setTipoPromocion(getStringCellValue(row.getCell(3)));
+                    
+                    Cell valorDescuentoCell = row.getCell(4);
+                    if (valorDescuentoCell != null && valorDescuentoCell.getCellType() == CellType.NUMERIC) {
+                        promocion.setValorDescuento(valorDescuentoCell.getNumericCellValue());
+                    }
+
+                    Cell fechaInicioCell = row.getCell(5);
+                    if (fechaInicioCell != null && DateUtil.isCellDateFormatted(fechaInicioCell)) {
+                        promocion.setFechaInicio(convertToLocalDate(fechaInicioCell.getDateCellValue()));
+                    }
+                    
+                    Cell fechaFinCell = row.getCell(6);
+                    if (fechaFinCell != null && DateUtil.isCellDateFormatted(fechaFinCell)) {
+                        promocion.setFechaFin(convertToLocalDate(fechaFinCell.getDateCellValue()));
+                    }
+
+                    promocion.setCodigoPromocional(getStringCellValue(row.getCell(7)));
+                    
+                    Cell cantidadUsosCell = row.getCell(8);
+                    if (cantidadUsosCell != null && cantidadUsosCell.getCellType() == CellType.NUMERIC) {
+                        promocion.setCantidadMaximaUsos((int) cantidadUsosCell.getNumericCellValue());
+                        promocion.setUsosRestantes((int) cantidadUsosCell.getNumericCellValue()); // Initializes remaining uses.
+                    }
+                    
+                    promocion.setAplicableA(getStringCellValue(row.getCell(9)));
+                    
+                    // Reads the 'activo' status (boolean, string, or numeric).
+                    Cell activoCell = row.getCell(10);
+                    if (activoCell != null) {
+                        if (activoCell.getCellType() == CellType.BOOLEAN) {
+                            promocion.setActivo(activoCell.getBooleanCellValue());
+                        } else if (activoCell.getCellType() == CellType.STRING) {
+                            promocion.setActivo(Boolean.parseBoolean(activoCell.getStringCellValue()));
+                        } else if (activoCell.getCellType() == CellType.NUMERIC) {
+                            promocion.setActivo(activoCell.getNumericCellValue() == 1); // 1 = true, 0 = false.
+                        }
+                    }
+
+                    promociones.add(promocion);
                 } catch (Exception e) {
-                    logger.error("Error al procesar fila {}: {}", i, e.getMessage());
+                    logger.error("Error reading promotion row (Row {}): {}", row.getRowNum(), e.getMessage(), e);
                 }
             }
-            
-            logger.info("Se leyeron {} empleados del archivo {}", employees.size(), filePath);
         }
-        
-        return employees;
+        logger.info("{} promotions read from Excel file: {}", promociones.size(), filePath);
+        return promociones;
     }
-    
+
     /**
-     * Extrae un empleado de una fila del Excel
+     * Writes a list of promotions to a new Excel file.
+     * Creates a sheet named "Promociones" with defined headers and auto-fits column widths.
+     *
+     * @param promociones The list of Promotion objects to write.
+     * @param filePath    The path to the output Excel file.
+     * @throws IOException If an error occurs while writing the file.
      */
-    private Employee extractEmployeeFromRow(Row row) {
-        try {
-            Employee employee = new Employee();
-            
-            // ID
-            Cell idCell = row.getCell(COL_ID);
-            if (idCell != null && idCell.getCellType() == CellType.NUMERIC) {
-                employee.setId((long) idCell.getNumericCellValue());
+    public void writePromocionesToExcel(List<Promocion> promociones, String filePath) throws IOException {
+        try (Workbook workbook = new XSSFWorkbook();
+             FileOutputStream fos = new FileOutputStream(filePath)) {
+
+            Sheet sheet = workbook.createSheet("Promociones");
+
+            // Defines and creates the header row.
+            Row headerRow = sheet.createRow(0);
+            String[] headers = {"idPromocion", "nombre", "descripcion", "tipoPromocion", "valorDescuento",
+                                 "fechaInicio", "fechaFin", "codigoPromocional", "cantidadMaximaUsos",
+                                 "aplicableA", "activo"};
+            for (int i = 0; i < headers.length; i++) {
+                headerRow.createCell(i).setCellValue(headers[i]);
             }
-            
-            // Nombre
-            Cell firstNameCell = row.getCell(COL_FIRST_NAME);
-            if (firstNameCell != null) {
-                employee.setFirstName(getCellValueAsString(firstNameCell));
+
+            // Defines date cell style to display dates correctly.
+            CreationHelper createHelper = workbook.getCreationHelper();
+            CellStyle dateCellStyle = workbook.createCellStyle();
+            dateCellStyle.setDataFormat(createHelper.createDataFormat().getFormat("yyyy-MM-dd"));
+
+            // Writes data for each promotion in consecutive rows.
+            int rowNum = 1;
+            for (Promocion promocion : promociones) {
+                Row row = sheet.createRow(rowNum++);
+
+                row.createCell(0).setCellValue(promocion.getIdPromocion() != null ? promocion.getIdPromocion().toString() : "");
+                row.createCell(1).setCellValue(promocion.getNombre());
+                row.createCell(2).setCellValue(promocion.getDescripcion());
+                row.createCell(3).setCellValue(promocion.getTipoPromocion());
+                row.createCell(4).setCellValue(promocion.getValorDescuento() != null ? promocion.getValorDescuento() : 0.0);
+
+                Cell fechaInicioCell = row.createCell(5);
+                if (promocion.getFechaInicio() != null) {
+                    fechaInicioCell.setCellValue(promocion.getFechaInicio());
+                    fechaInicioCell.setCellStyle(dateCellStyle); // Applies date format.
+                }
+
+                Cell fechaFinCell = row.createCell(6);
+                if (promocion.getFechaFin() != null) {
+                    fechaFinCell.setCellValue(promocion.getFechaFin());
+                    fechaFinCell.setCellStyle(dateCellStyle); // Applies date format.
+                }
+
+                row.createCell(7).setCellValue(promocion.getCodigoPromocional());
+                row.createCell(8).setCellValue(promocion.getCantidadMaximaUsos() != null ? promocion.getCantidadMaximaUsos() : 0);
+                row.createCell(9).setCellValue(promocion.getAplicableA());
+                row.createCell(10).setCellValue(promocion.isActivo());
             }
-            
-            // Apellido
-            Cell lastNameCell = row.getCell(COL_LAST_NAME);
-            if (lastNameCell != null) {
-                employee.setLastName(getCellValueAsString(lastNameCell));
+
+            // Auto-fits all columns to their content for better readability.
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
             }
-            
-            // Email
-            Cell emailCell = row.getCell(COL_EMAIL);
-            if (emailCell != null) {
-                employee.setEmail(getCellValueAsString(emailCell));
-            }
-            
-            // Departamento
-            Cell deptCell = row.getCell(COL_DEPARTMENT);
-            if (deptCell != null) {
-                employee.setDepartment(getCellValueAsString(deptCell));
-            }
-            
-            // Salario
-            Cell salaryCell = row.getCell(COL_SALARY);
-            if (salaryCell != null && salaryCell.getCellType() == CellType.NUMERIC) {
-                employee.setSalary(salaryCell.getNumericCellValue());
-            }
-            
-            // Fecha de nacimiento
-            Cell birthDateCell = row.getCell(COL_BIRTH_DATE);
-            if (birthDateCell != null && DateUtil.isCellDateFormatted(birthDateCell)) {
-                Date birthDate = birthDateCell.getDateCellValue();
-                employee.setBirthDate(birthDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate());
-            }
-            
-            // Fecha de contratación
-            Cell hireDateCell = row.getCell(COL_HIRE_DATE);
-            if (hireDateCell != null && DateUtil.isCellDateFormatted(hireDateCell)) {
-                Date hireDate = hireDateCell.getDateCellValue();
-                employee.setHireDate(hireDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate());
-            }
-            
-            return employee;
-            
+
+            workbook.write(fos); // Saves the workbook to the file.
+            logger.info("{} promotions written to Excel file: {}", promociones.size(), filePath);
+
         } catch (Exception e) {
-            logger.error("Error al extraer empleado de fila: {}", e.getMessage());
-            return null;
+            logger.error("Error writing promotions to Excel: {}", e.getMessage(), e);
+            throw e; // Rethrows the exception for the caller to handle.
         }
     }
-    
+
     /**
-     * Obtiene el valor de una celda como String
+     * Gets the cell value as a String, handling different cell types.
+     *
+     * @param cell The Excel cell.
+     * @return The cell value as a String; empty string if the cell is null or the type is not handled.
      */
-    private String getCellValueAsString(Cell cell) {
-        if (cell == null) return null;
-        
+    private String getStringCellValue(Cell cell) {
+        if (cell == null) {
+            return "";
+        }
         switch (cell.getCellType()) {
-            case STRING:
-                return cell.getStringCellValue().trim();
+            case STRING: return cell.getStringCellValue();
             case NUMERIC:
-                return String.valueOf((long) cell.getNumericCellValue());
-            case BOOLEAN:
-                return String.valueOf(cell.getBooleanCellValue());
-            case FORMULA:
-                return cell.getCellFormula();
-            default:
-                return "";
+                // If numeric and date formatted, returns the date as a String.
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getDateCellValue().toString();
+                }
+                return String.valueOf(cell.getNumericCellValue());
+            case BOOLEAN: return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA: return cell.getCellFormula(); // Returns the formula if it's a formula cell.
+            default: return ""; // For unexpected cell types.
         }
     }
-    
-    /**
-     * Escribe empleados a un archivo Excel con formato profesional
-     */
-    public void writeEmployeesToExcel(List<Employee> employees, String filePath) throws IOException {
-        logger.info("Iniciando escritura de {} empleados a archivo: {}", employees.size(), filePath);
-        
-        try (Workbook workbook = new XSSFWorkbook()) {
-            
-            // Crear hoja de empleados
-            Sheet employeeSheet = workbook.createSheet("Empleados");
-            createEmployeeSheet(workbook, employeeSheet, employees);
-            
-            // Escribir archivo
-            try (FileOutputStream fos = new FileOutputStream(filePath)) {
-                workbook.write(fos);
-                logger.info("Archivo Excel creado exitosamente: {}", filePath);
-            }
-        }
-    }
-    
 
     /**
-     * Crea estilo para encabezados
+     * Converts a java.util.Date object to java.time.LocalDate.
+     * Uses the system's default time zone.
+     *
+     * @param dateToConvert The Date object to convert.
+     * @return The resulting LocalDate object.
      */
-    private CellStyle createHeaderStyle(Workbook workbook) {
-        CellStyle style = workbook.createCellStyle();
-        Font font = workbook.createFont();
-        
-        font.setBold(true);
-        font.setColor(IndexedColors.WHITE.getIndex());
-        font.setFontHeightInPoints((short) 12);
-        
-        style.setFont(font);
-        style.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
-        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        style.setBorderTop(BorderStyle.THIN);
-        style.setBorderBottom(BorderStyle.THIN);
-        style.setBorderLeft(BorderStyle.THIN);
-        style.setBorderRight(BorderStyle.THIN);
-        style.setAlignment(HorizontalAlignment.CENTER);
-        style.setVerticalAlignment(VerticalAlignment.CENTER);
-        
-        return style;
+    private LocalDate convertToLocalDate(Date dateToConvert) {
+        return dateToConvert.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate();
     }
-    
-    /**
-     * Crea estilo para datos generales
-     */
-    private CellStyle createDataStyle(Workbook workbook) {
-        CellStyle style = workbook.createCellStyle();
-        style.setBorderTop(BorderStyle.THIN);
-        style.setBorderBottom(BorderStyle.THIN);
-        style.setBorderLeft(BorderStyle.THIN);
-        style.setBorderRight(BorderStyle.THIN);
-        style.setAlignment(HorizontalAlignment.LEFT);
-        style.setVerticalAlignment(VerticalAlignment.CENTER);
-        return style;
-    }
-    
-    /**
-     * Crea estilo para moneda
-     */
-    private CellStyle createCurrencyStyle(Workbook workbook) {
-        CellStyle style = createDataStyle(workbook);
-        DataFormat format = workbook.createDataFormat();
-        style.setDataFormat(format.getFormat("$#,##0.00"));
-        style.setAlignment(HorizontalAlignment.RIGHT);
-        return style;
-    }
-    
-    /**
-     * Crea estilo para fechas
-     */
-    private CellStyle createDateStyle(Workbook workbook) {
-        CellStyle style = createDataStyle(workbook);
-        CreationHelper createHelper = workbook.getCreationHelper();
-        style.setDataFormat(createHelper.createDataFormat().getFormat("dd/mm/yyyy"));
-        style.setAlignment(HorizontalAlignment.CENTER);
-        return style;
-    }
-    
-    
-    private void createEmployeeSheet(Workbook workbook, Sheet sheet, List<Employee> employees) {
-
-        // Crear estilos (mantener código original)
-        CellStyle headerStyle = createHeaderStyle(workbook);
-        CellStyle dataStyle = createDataStyle(workbook);
-        CellStyle currencyStyle = createCurrencyStyle(workbook);
-        CellStyle dateStyle = createDateStyle(workbook);
-
-        // Crear encabezados (mantener código original)
-        Row headerRow = sheet.createRow(0);
-        String[] headers = {"ID", "Nombre", "Apellido", "Email", "Departamento", 
-                           "Salario", "Fecha Nacimiento", "Fecha Contratación", "Edad", "Años Servicio"};
-
-        for (int i = 0; i < headers.length; i++) {
-            Cell cell = headerRow.createCell(i);
-            cell.setCellValue(headers[i]);
-            cell.setCellStyle(headerStyle);
-        }
-
-        // Llenar datos - VERSIÓN CORREGIDA CON VALIDACIONES NULL
-        int rowNum = 1;
-        for (Employee emp : employees) {
-            Row row = sheet.createRow(rowNum++);
-
-            // ID - con validación null
-            Cell idCell = row.createCell(0);
-            idCell.setCellValue(emp.getId() != null ? emp.getId() : 0);
-            idCell.setCellStyle(dataStyle);
-
-            // Nombre - con validación null
-            Cell firstNameCell = row.createCell(1);
-            firstNameCell.setCellValue(emp.getFirstName() != null ? emp.getFirstName() : "");
-            firstNameCell.setCellStyle(dataStyle);
-
-            // Apellido - con validación null
-            Cell lastNameCell = row.createCell(2);
-            lastNameCell.setCellValue(emp.getLastName() != null ? emp.getLastName() : "");
-            lastNameCell.setCellStyle(dataStyle);
-
-            // Email - con validación null
-            Cell emailCell = row.createCell(3);
-            emailCell.setCellValue(emp.getEmail() != null ? emp.getEmail() : "");
-            emailCell.setCellStyle(dataStyle);
-
-            // Departamento - con validación null
-            Cell deptCell = row.createCell(4);
-            deptCell.setCellValue(emp.getDepartment() != null ? emp.getDepartment() : "");
-            deptCell.setCellStyle(dataStyle);
-
-            // Salario - CORREGIDO para evitar NullPointerException
-            Cell salaryCell = row.createCell(5);
-            if (emp.getSalary() != null) {
-                salaryCell.setCellValue(emp.getSalary());
-            } else {
-                salaryCell.setCellValue(0.0);
-            }
-            salaryCell.setCellStyle(currencyStyle);
-
-            // Fecha nacimiento - con validación null
-            Cell birthDateCell = row.createCell(6);
-            if (emp.getBirthDate() != null) {
-                birthDateCell.setCellValue(Date.from(emp.getBirthDate().atStartOfDay(ZoneId.systemDefault()).toInstant()));
-                birthDateCell.setCellStyle(dateStyle);
-            } else {
-                birthDateCell.setCellValue("");
-                birthDateCell.setCellStyle(dataStyle);
-            }
-
-            // Fecha contratación - con validación null
-            Cell hireDateCell = row.createCell(7);
-            if (emp.getHireDate() != null) {
-                hireDateCell.setCellValue(Date.from(emp.getHireDate().atStartOfDay(ZoneId.systemDefault()).toInstant()));
-                hireDateCell.setCellStyle(dateStyle);
-            } else {
-                hireDateCell.setCellValue("");
-                hireDateCell.setCellStyle(dataStyle);
-            }
-
-            // Edad - calculada de forma segura
-            Cell ageCell = row.createCell(8);
-            ageCell.setCellValue(emp.getAge()); // getAge() ya maneja null internamente
-            ageCell.setCellStyle(dataStyle);
-
-            // Años de servicio - calculado de forma segura
-            Cell serviceCell = row.createCell(9);
-            serviceCell.setCellValue(emp.getYearsOfService()); // getYearsOfService() ya maneja null
-            serviceCell.setCellStyle(dataStyle);
-        }
-
-        // Ajustar ancho de columnas
-        for (int i = 0; i < headers.length; i++) {
-            sheet.autoSizeColumn(i);
-        }
-
-        System.out.println("📊 Hoja Excel creada con " + employees.size() + " empleados");
-    }
-    
 }

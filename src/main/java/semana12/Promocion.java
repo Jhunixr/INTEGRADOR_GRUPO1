@@ -1,14 +1,15 @@
 package semana12;
 
 import com.google.common.base.Objects;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 
 import java.time.LocalDate;
+import java.util.Comparator; // Importar Comparator para las comparaciones funcionales
 import java.util.UUID; // Importar UUID para un identificador único
 
-public class Promocion {
+// Implementa la interfaz Comparable para definir un orden natural
+public class Promocion implements Comparable<Promocion> {
     private UUID idPromocion;
     private String nombre;
     private String descripcion;
@@ -28,7 +29,7 @@ public class Promocion {
         this.activo = true; // Por defecto, una promoción al crearla está activa
     }
 
-    // Constructor completo (ajustado para incluir todos los atributos)
+    // Constructor con 9 parámetros (sin id y activo)
     public Promocion(String nombre, String descripcion, String tipoPromocion,
                      Double valorDescuento, LocalDate fechaInicio, LocalDate fechaFin,
                      String codigoPromocional, Integer cantidadMaximaUsos,
@@ -44,6 +45,25 @@ public class Promocion {
         this.cantidadMaximaUsos = cantidadMaximaUsos;
         this.usosRestantes = cantidadMaximaUsos; // Inicialmente, usosRestantes es igual a cantidadMaximaUsos
         this.aplicableA = aplicableA;
+    }
+
+    // Constructor con 11 parámetros (incluyendo id y activo)
+    public Promocion(UUID idPromocion, String nombre, String descripcion, String tipoPromocion,
+                     Double valorDescuento, LocalDate fechaInicio, LocalDate fechaFin,
+                     String codigoPromocional, Integer cantidadMaximaUsos,
+                     String aplicableA, boolean activo) {
+        this.idPromocion = idPromocion;
+        this.nombre = nombre;
+        this.descripcion = descripcion;
+        this.tipoPromocion = tipoPromocion;
+        this.valorDescuento = valorDescuento;
+        this.fechaInicio = fechaInicio;
+        this.fechaFin = fechaFin;
+        this.codigoPromocional = codigoPromocional;
+        this.cantidadMaximaUsos = cantidadMaximaUsos;
+        this.usosRestantes = cantidadMaximaUsos; // Asume que se inicializan los usos restantes
+        this.aplicableA = aplicableA;
+        this.activo = activo;
     }
 
     /**
@@ -76,7 +96,6 @@ public class Promocion {
 
     // Getters y Setters
     public UUID getIdPromocion() { return idPromocion; }
-    // No se debería permitir setear el ID una vez creado, pero se deja para consistencia si es necesario.
     public void setIdPromocion(UUID idPromocion) { this.idPromocion = idPromocion; }
 
     public String getNombre() { return nombre; }
@@ -103,14 +122,12 @@ public class Promocion {
     public Integer getCantidadMaximaUsos() { return cantidadMaximaUsos; }
     public void setCantidadMaximaUsos(Integer cantidadMaximaUsos) {
         this.cantidadMaximaUsos = cantidadMaximaUsos;
-        // Si se actualiza la cantidad máxima, se podría resetear o ajustar usosRestantes
         if (this.usosRestantes == null || this.usosRestantes > cantidadMaximaUsos) {
             this.usosRestantes = cantidadMaximaUsos;
         }
     }
 
     public Integer getUsosRestantes() { return usosRestantes; }
-    // No se debería setear directamente usosRestantes fuera de registrarUso(), pero se incluye por si acaso.
     public void setUsosRestantes(Integer usosRestantes) { this.usosRestantes = usosRestantes; }
 
     public String getAplicableA() { return aplicableA; }
@@ -128,7 +145,6 @@ public class Promocion {
         if (obj == null || getClass() != obj.getClass()) return false;
 
         Promocion promocion = (Promocion) obj;
-        // Las promociones se consideran iguales si tienen el mismo ID
         return Objects.equal(idPromocion, promocion.idPromocion);
     }
 
@@ -159,5 +175,23 @@ public class Promocion {
                 .append("aplicableA", aplicableA)
                 .append("activo", activo)
                 .toString();
+    }
+
+    /**
+     * Implementación del método compareTo para el orden natural de las promociones.
+     * Ordena primero por fecha de inicio (ascendente, nulos primero),
+     * y si las fechas son iguales (o ambas nulas), luego por nombre (ascendente, nulos primero).
+     *
+     * @param otraPromocion La otra promoción con la que comparar.
+     * @return Un valor negativo, cero, o un valor positivo si esta promoción
+     * es menor que, igual a, o mayor que la promoción especificada.
+     */
+    @Override
+    public int compareTo(Promocion otraPromocion) {
+        // Compara por fecha de inicio, colocando los nulos al principio.
+        // Si las fechas son iguales, encadena la comparación por nombre.
+        return Comparator.nullsFirst(Comparator.comparing(Promocion::getFechaInicio))
+                         .thenComparing(Comparator.comparing(Promocion::getNombre, Comparator.nullsFirst(String::compareTo)))
+                         .compare(this, otraPromocion);
     }
 }
